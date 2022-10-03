@@ -9,7 +9,14 @@ sources = ['{}/{}'.format(dir, src) for src in os.listdir(dir)
 setup(
     name='dwconv',
     version='1.0.0',
-    install_requires=["torch", "numpy"],
-    ext_modules=[CUDAExtension(name='dwconv', sources=sources)],
-    cmdclass={'build_ext': BuildExtension},
+    packages=['dwconv'],
+    install_requires=["torch"],
+    ext_modules=[
+        CUDAExtension(
+            name='dwconv.nn',
+            sources=sources)
+    ],
+    cmdclass={
+        'build_ext': BuildExtension
+    },
 )
