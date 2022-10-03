@@ -18,16 +18,16 @@ class OctreeDWConvFunction(Function):
   def backward(ctx, grad):
     data, weights, neigh = ctx.saved_tensors
 
-    grad_out = None
+    grad_d = None
     if ctx.needs_input_grad[0]:
       ineigh = inverse_neigh(neigh)
-      grad_out = dwconv_forward_backward(grad, weights, ineigh)
+      grad_d = dwconv_forward_backward(grad, weights, ineigh)
 
     grad_w = None
     if ctx.needs_input_grad[1]:
       grad_w = dwconv_weight_backward(grad, data, neigh)
 
-    return grad_out, grad_w, None
+    return grad_d, grad_w, None
 
 
 octree_dwconv = OctreeDWConvFunction.apply

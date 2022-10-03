@@ -43,13 +43,14 @@ __global__ void dwconv_weight_backward_kernel(
     int c = i % channel;
     for (int k = 0; k < kngh; ++k) {
       int ni = ineigh[h * kngh + k];
-      weights[threadIdx.x] =
-          ni >= 0 ? data[ni * channel + c] * grad[i] : Dtype(0);
+      int tid = threadIdx.x;
+      weights[tid] = ni >= 0 ? data[ni * channel + c] * grad[i] : Dtype(0);
       __syncthreads();
       block_reduce(weights);
-
-      int n = i / kCudaThreadsNum;
-      out[(n * kngh + k) * channel + c] = weights[0];
+      if (tid == 0) {
+        int n = i / kCudaThreadsNum;
+        out[(n * kngh + k) * channel + c] = weights[0];
+      }
     }
   }
 }
@@ -91,7 +92,8 @@ Tensor dwconv_forward_backward(Tensor data, Tensor weight, Tensor neigh) {
       <<<CudaGetBlocks(nthreads), kCudaThreadsNum, 0, stream>>>(
       out.data_ptr<float>(), data.data_ptr<float>(), weight.data_ptr<float>(),
       neigh.data_ptr<int>(), height, channel, kngh, nthreads);
-  return Tensor();
+  CUDA_POST_KERNEL_CHECK;
+  return out;
 }
 
 Tensor dwconv_weight_backward(Tensor grad, Tensor data, Tensor neigh) {
@@ -99,11 +101,12 @@ Tensor dwconv_weight_backward(Tensor grad, Tensor data, Tensor neigh) {
   int64_t channel = data.size(1);
   int64_t nthreads = height * channel;
   int64_t kngh = neigh.size(1);
-  Tensor out = grad.new_zeros({});
+  Tensor out = grad.new_zeros({height / kCudaThreadsNum, kngh, 1, channel});
   auto stream = at::cuda::getCurrentCUDAStream();
   dwconv_weight_backward_kernel<float>
       <<<CudaGetBlocks(nthreads), kCudaThreadsNum, 0, stream>>>(
       out.data_ptr<float>(), grad.data_ptr<float>(), data.data_ptr<float>(),
       neigh.data_ptr<int>(), height, channel, kngh, nthreads);
+  CUDA_POST_KERNEL_CHECK;
   return out.sum(0);
 }
