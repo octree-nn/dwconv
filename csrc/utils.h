@@ -10,7 +10,7 @@
 
 // CUDA: grid stride looping
 #define CUDA_KERNEL_LOOP(i, n)                                       \
-  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < (n);       \
+  for (int64_t i = blockIdx.x * blockDim.x + threadIdx.x; i < (n);   \
        i += blockDim.x * gridDim.x)
 
 // CUDA: check for error after kernel execution and exit loudly if there is one.

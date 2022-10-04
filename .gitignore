@@ -8,5 +8,4 @@ __pycache__
 *.octree
 *.points
 debug.log
-data
 logs
