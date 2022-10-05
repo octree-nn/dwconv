@@ -34,35 +34,35 @@ __global__ void dwconv_forward_backward_kernel(
   }
 }
 
+
 template <typename Dtype>
 __global__ void dwconv_weight_backward_kernel(
     Dtype* out, const Dtype* __restrict__ grad, const Dtype* __restrict__ data,
     const int64_t* __restrict__ ineigh, const int64_t height,
-    const int64_t channel, const int64_t kngh, const int64_t height_a,
+    const int64_t channel, const int64_t kngh, const int64_t height_aug,
     const int64_t nthreads) {
   __shared__ Dtype weights[kCudaThreadsNum];
   CUDA_KERNEL_LOOP(i, nthreads) {
-    int64_t c = i / height_a;
-    int64_t h = i % height_a;
-    for (int k = 0; k < kngh; ++k) {
-      int64_t tid = threadIdx.x;
-      weights[tid] = Dtype(0);
-      if (h < height) {
-        int64_t ni = ineigh[h * kngh + k];
-        if (ni >= 0) {
-          weights[tid] = data[ni * channel + c] * grad[h * channel + c];
-        }
+    int64_t h = i % height_aug;
+    int64_t t = i / height_aug;
+    int64_t c = t % channel;
+    int64_t k = t / channel;
+    int64_t tid = threadIdx.x;
+    weights[tid] = Dtype(0);
+    if (h < height) {
+      int64_t ni = ineigh[h * kngh + k];
+      if (ni >= 0) {
+        weights[tid] = data[ni * channel + c] * grad[h * channel + c];
       }
-      __syncthreads();
-      block_reduce(weights);
-      if (tid == 0) {
-        int64_t bid = blockIdx.x;
-        out[bid * kngh + k] = weights[0];
-      }
-      __syncthreads();
+    }
+    __syncthreads();
+    block_reduce(weights);
+    if (tid == 0) {
+      out[i / kCudaThreadsNum] = weights[0];
     }
   }
 }
+
 
 __global__ void inverse_neigh_kernel(
     int64_t* ineigh, const int64_t* __restrict__ neigh, const int64_t height,
@@ -109,16 +109,17 @@ Tensor dwconv_weight_backward(Tensor grad, Tensor data, Tensor neigh) {
   int64_t height = data.size(0);
   int64_t channel = data.size(1);
   int64_t kngh = neigh.size(1);
-  // Here `height_a` makes sure that the channels of the weights for the threads
-  // in one  block are the same.
-  int64_t height_a = CudaGetBlocks(height) * kCudaThreadsNum;
-  int64_t nthreads = height_a * channel;
-  Tensor out = grad.new_zeros({channel, CudaGetBlocks(height_a), 1, kngh});
+  // Here `height_aug` makes sure that the channels of the weights for
+  // the threads in one  block are the same.
+  int64_t height_blk = CudaGetBlocks(height);
+  int64_t height_aug = height_blk * kCudaThreadsNum;
+  int64_t nthreads = kngh * channel * height_aug;
+  Tensor out = grad.new_zeros({kngh, 1, channel, height_blk});
   auto stream = at::cuda::getCurrentCUDAStream();
   dwconv_weight_backward_kernel<float>
       <<<CudaGetBlocks(nthreads), kCudaThreadsNum, 0, stream>>>(
       out.data_ptr<float>(), grad.data_ptr<float>(), data.data_ptr<float>(),
-      neigh.data_ptr<int64_t>(), height, channel, kngh, height_a, nthreads);
+      neigh.data_ptr<int64_t>(), height, channel, kngh, height_aug, nthreads);
   CUDA_POST_KERNEL_CHECK;
-  return out.sum(1).transpose(0, 2);
+  return out.sum(3);
 }
