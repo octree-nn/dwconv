@@ -11,6 +11,8 @@ class OctreeDWConvFunction(Function):
   @staticmethod
   def forward(ctx, data: torch.Tensor, weights: torch.Tensor, neigh: torch.Tensor):
     data = data.contiguous()
+    weights = weights.contiguous()
+    neigh = neigh.contiguous()
     out = dwconv_forward_backward(data, weights, neigh)
     ctx.save_for_backward(data, weights, neigh)
     return out
