@@ -1,7 +1,10 @@
 import torch
+import ocnn
+from typing import List
+from ocnn.octree import Octree
 from torch.autograd import Function
 
-from .nn import dwconv_forward_backward, dwconv_weight_backward, inverse_neigh
+from .core import dwconv_forward_backward, dwconv_weight_backward, inverse_neigh
 
 
 class OctreeDWConvFunction(Function):
@@ -30,8 +33,24 @@ class OctreeDWConvFunction(Function):
     grad_w = None
     if ctx.needs_input_grad[1]:
       grad_w = dwconv_weight_backward(grad, data, neigh)
-
     return grad_d, grad_w, None
 
 
 octree_dwconv = OctreeDWConvFunction.apply
+
+
+class OctreeDWConv(ocnn.nn.OctreeDWConv):
+  r''' Speeds up `ocnn.nn.OctreeDWConv` with CUDA.
+  '''
+
+  def __init__(self, channels: int, kernel_size: List[int] = [3],
+               nempty: bool = False, use_bias: bool = False):
+    super().__init__(in_channels=channels, kernel_size=kernel_size, stride=1,
+                     nempty=nempty, use_bias=use_bias)
+
+  def forward(self, data: torch.Tensor, octree: Octree, depth: int):
+    neigh = octree.get_neigh(depth, self.kernel, self.stride, self.nempty)
+    out = octree_dwconv(data, self.weights, neigh)
+    if self.use_bias:
+      out += self.bias
+    return out

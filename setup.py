@@ -13,7 +13,7 @@ setup(
     install_requires=["torch"],
     ext_modules=[
         CUDAExtension(
-            name='dwconv.nn',
+            name='dwconv.core',
             sources=sources)
     ],
     cmdclass={

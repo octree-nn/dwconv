@@ -17,7 +17,7 @@
 #define CUDA_POST_KERNEL_CHECK CUDA_CHECK(cudaPeekAtLastError())
 
 // CUDA: number of threads per block
-constexpr int kCudaThreadsNum = 256;
+constexpr int kCudaThreadsNum = 512;
 
 // CUDA: number of blocks for threads.
 inline int CudaGetBlocks(const int N) {

@@ -1,16 +1,9 @@
-# --------------------------------------------------------
-# Octree-based Sparse Convolutional Neural Networks
-# Copyright (c) 2022 Peng-Shuai Wang <wangps@hotmail.com>
-# Licensed under The MIT License [see LICENSE for details]
-# Written by Peng-Shuai Wang
-# --------------------------------------------------------
-
 import os
 import torch
 import ocnn
 import unittest
-from dwconv import octree_dwconv
-from dwconv.nn import dwconv_forward_backward, dwconv_weight_backward, inverse_neigh
+import dwconv
+from dwconv.core import dwconv_forward_backward, dwconv_weight_backward, inverse_neigh
 
 from .utils import get_batch_octree
 
@@ -21,46 +14,58 @@ class TesOctreeDWConv(unittest.TestCase):
 
     depth = 4
     channel = 256
-    octree = get_batch_octree()
+    octree = get_batch_octree().cuda()
     kernel_size = [[3, 3, 3], [3, 1, 1], [1, 3, 1], [1, 1, 3],
                    [2, 2, 2], [3, 3, 1], [1, 3, 3], [3, 1, 3]]
 
     for i in range(len(kernel_size)):
-      for stride in [1]:  # [1, 2]:
-        nnum = octree.nnum_nempty[depth]
-        rnd_data = torch.randn(nnum, channel)
+      for nempty in [True, False]:
+        # ocnn.nn.OctreeDWConv
+        nnum = octree.nnum_nempty[depth] if nempty else octree.nnum[depth]
+        rnd_data = torch.randn(nnum, channel).cuda()
         ocnn_data = rnd_data.clone().requires_grad_()
-        ocnn_dwconv = ocnn.nn.OctreeDWConv(
-            channel, kernel_size[i], stride, nempty=True)
-        ocnn_out = ocnn_dwconv(ocnn_data, octree, depth)
+        ocnn_conv = ocnn.nn.OctreeDWConv(channel, kernel_size[i], nempty=nempty)
+        ocnn_conv.cuda()
+        ocnn_out = ocnn_conv(ocnn_data, octree, depth)
         ocnn_out.sum().backward()
 
-        data = rnd_data.clone().cuda().requires_grad_()
-        weights = ocnn_dwconv.weights.detach().clone().cuda().requires_grad_()
+        # prepare test data
+        data = rnd_data.clone().requires_grad_()
+        weights = ocnn_conv.weights.detach().clone().requires_grad_()
         kernel = ''.join([str(k) for k in kernel_size[i]])
-        neigh = octree.get_neigh(depth, kernel, stride, nempty=True).cuda()
+        neigh = octree.get_neigh(depth, kernel, nempty=nempty)
 
+        # test the api seperatly
         out = dwconv_forward_backward(data, weights, neigh)
         grad = torch.full_like(data, fill_value=1)
         ineigh = inverse_neigh(neigh)
         grad_d = dwconv_forward_backward(grad, weights, ineigh)
         grad_w = dwconv_weight_backward(grad, data, neigh)
+        self.assertTrue(torch.allclose(out, ocnn_out, atol=1e-6))
+        self.assertTrue(torch.allclose(grad_d, ocnn_data.grad, atol=1e-6))
         self.assertTrue(torch.allclose(
-            out.cpu(), ocnn_out, atol=1e-6))
-        self.assertTrue(torch.allclose(
-            grad_d.cpu(), ocnn_data.grad, atol=1e-6))
-        self.assertTrue(torch.allclose(
-            grad_w.cpu(), ocnn_dwconv.weights.grad, atol=5e-5))
+            grad_w, ocnn_conv.weights.grad, atol=5e-5))
 
-        out = octree_dwconv(data, weights, neigh)
+        # test the autograd function
+        out = dwconv.octree_dwconv(data, weights, neigh)
+        out.sum().backward()
+        self.assertTrue(torch.allclose(out, ocnn_out, atol=1e-6))
+        self.assertTrue(torch.allclose(data.grad, ocnn_data.grad, atol=1e-6))
+        self.assertTrue(torch.allclose(
+            weights.grad, ocnn_conv.weights.grad, atol=5e-5))
+
+        # test the module
+        data = rnd_data.clone().requires_grad_()
+        octree_dwconv = dwconv.OctreeDWConv(channel, kernel_size[i], nempty)
+        octree_dwconv.cuda()
+        octree_dwconv.weights.data.copy_(ocnn_conv.weights.data)
+        out = octree_dwconv(data, octree, depth)
         out.sum().backward()
 
+        self.assertTrue(torch.allclose(out, ocnn_out, atol=1e-6))
+        self.assertTrue(torch.allclose(data.grad, ocnn_data.grad, atol=1e-6))
         self.assertTrue(torch.allclose(
-            out.cpu(), ocnn_out, atol=1e-6))
-        self.assertTrue(torch.allclose(
-            data.grad.cpu(), ocnn_data.grad, atol=1e-6))
-        self.assertTrue(torch.allclose(
-            weights.grad.cpu(), ocnn_dwconv.weights.grad, atol=5e-5))
+            octree_dwconv.weights.grad, ocnn_conv.weights.grad, atol=5e-5))
 
 
 if __name__ == "__main__":
