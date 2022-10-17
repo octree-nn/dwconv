@@ -11,6 +11,8 @@ setup(
     version='1.0.0',
     packages=['dwconv'],
     install_requires=["torch"],
+    include_package_data=True,
+    zip_safe=False,
     ext_modules=[
         CUDAExtension(
             name='dwconv.core',
