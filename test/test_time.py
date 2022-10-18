@@ -5,6 +5,8 @@ import dwconv
 import time
 import numpy as np
 
+torch.cuda.set_device(1)
+
 pts = torch.from_numpy(np.load('test/data/pts.npy'))
 points = ocnn.octree.Points(points=pts[:, :3], features=pts[:, 3:])
 
@@ -36,7 +38,7 @@ for i in range(10):
 
 # test the module
 dw_time = []
-dw_conv = dwconv.OctreeDWConv(channel, kernel_size=[3], nempty=nempty).cuda()
+dw_conv = dwconv.OctreeDWConvT(channel, kernel_size=[3], nempty=nempty).cuda()
 dw_conv.weights.data.copy_(ocnn_conv.weights.data)
 for i in range(10):
   t1 = time.perf_counter()

@@ -56,7 +56,7 @@ class TesOctreeDWConv(unittest.TestCase):
 
         # test the module
         data = rnd_data.clone().requires_grad_()
-        octree_dwconv = dwconv.OctreeDWConv(channel, kernel_size[i], nempty)
+        octree_dwconv = dwconv.OctreeDWConvT(channel, kernel_size[i], nempty)
         octree_dwconv.cuda()
         octree_dwconv.weights.data.copy_(ocnn_conv.weights.data)
         out = octree_dwconv(data, octree, depth)
