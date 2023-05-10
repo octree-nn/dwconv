@@ -1,3 +1,10 @@
+// --------------------------------------------------------
+// Octree-based Sparse Convolutional Neural Networks
+// Copyright (c) 2023 Peng-Shuai Wang <wangps@hotmail.com>
+// Licensed under The MIT License [see LICENSE for details]
+// Written by Peng-Shuai Wang
+// --------------------------------------------------------
+
 #include "dwconv.h"
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
