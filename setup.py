@@ -25,7 +25,7 @@ setup(
     # packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
-    install_requires=['torch', 'numpy'],
+    install_requires=['torch', 'numpy', 'ocnn'],
     python_requires='>=3.8',
     license='MIT',
     ext_modules=[
